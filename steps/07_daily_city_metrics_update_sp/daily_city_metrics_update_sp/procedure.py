@@ -103,7 +103,7 @@ def main(session: Session) -> str:
 
 
 # For local debugging
-# Be aware you may need to type-convert arguments if you add input parameterss
+# Be aware you may need to type-convert arguments if you add input parametersss
 if __name__ == '__main__':
     # Create a local Snowpark session
     with Session.builder.getOrCreate() as session:
