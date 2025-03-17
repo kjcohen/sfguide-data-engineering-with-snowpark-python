@@ -19,7 +19,7 @@ with open(changed_files_path, 'r') as f:
     changed_files = {line.strip() for line in f.readlines() if line.strip()}
 
 def find_project_root(file_path):
-    """Finds the nearest directory containing snowflake.yml from a given file path."""
+    """Finds the nearest directory containing snowflake.yml, searching upwards."""
     project_dir = os.path.dirname(file_path)
     while project_dir and project_dir != root_directory:
         config_path = os.path.join(project_dir, snowflake_project_config_filename)
