@@ -1,12 +1,9 @@
 name: Deploy Snowpark Apps
 
-# Controls when the action will run. 
 on:
   push:
     branches:
       - main
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
 jobs:
@@ -14,7 +11,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - name: Checkout repository
         uses: actions/checkout@v3
 
@@ -23,25 +19,31 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install Python packages
-        run: pip install -r requirements.txt
-
-      - name: Upgrade SnowCLI
-        run: pip install --upgrade snowflake-cli-labs
-
-      - name: Check SnowCLI Installation
+      - name: Install Dependencies
         run: |
-          which snow || echo "SnowCLI not found"
-          snow --version || echo "SnowCLI not installed correctly"
-          snow --help
+          pip install --upgrade pip
+          pip install -r requirements.txt
 
+      - name: Get Changed SQL Files
+        id: changed_files
+        run: |
+          git fetch origin ${{ github.base_ref }} --depth=1
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }} HEAD | grep '\.sql$' || echo "")
+          echo "Changed files: $CHANGED_FILES"
+          echo "changed_files=$CHANGED_FILES" >> $GITHUB_ENV
 
-      - name: Deploy Snowpark apps
+      - name: Deploy Only Changed Procedures
+        if: env.changed_files != ''
         env:
+          CHANGED_FILES: ${{ env.changed_files }}
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
           SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
           SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
           SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
           SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
           SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
-        run: python deploy_snowpark_apps.py $GITHUB_WORKSPACE
+        run: python deploy_snowpark_apps.py "$CHANGED_FILES"
+
+      - name: Skip Deployment if No Changes
+        if: env.changed_files == ''
+        run: echo "No changed SQL files detected. Skipping deployment."
