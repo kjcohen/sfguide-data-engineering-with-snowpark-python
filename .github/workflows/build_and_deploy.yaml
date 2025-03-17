@@ -18,6 +18,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: Install SnowCLI
+        run: |
+          pip install -U snowflake-cli-labs
+
       - name: Setup Python 3.10
         uses: actions/setup-python@v4
         with:
