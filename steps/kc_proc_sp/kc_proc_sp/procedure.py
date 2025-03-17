@@ -16,6 +16,7 @@ import snowflake.snowpark.functions as F
 
 
 def main(inputstring: str) -> str:
+    print('test')
     return str(inputstring)
 
 
