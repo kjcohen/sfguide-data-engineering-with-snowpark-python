@@ -18,18 +18,22 @@ print(f"Deploying only updated Snowpark apps in {root_directory}")
 with open(changed_files_path, 'r') as f:
     changed_files = {line.strip() for line in f.readlines() if line.strip()}
 
-# Extract unique directories containing changed files
-updated_projects = set()
-for file in changed_files:
-    project_dir = os.path.dirname(file)
-
-    # Traverse up the directory tree to find the closest snowflake.yml
+def find_project_root(file_path):
+    """Finds the nearest directory containing snowflake.yml from a given file path."""
+    project_dir = os.path.dirname(file_path)
     while project_dir and project_dir != root_directory:
         config_path = os.path.join(project_dir, snowflake_project_config_filename)
         if os.path.exists(config_path):
-            updated_projects.add(project_dir)
-            break  # Stop once we find the Snowflake project root
+            return project_dir  # Return the first directory where snowflake.yml is found
         project_dir = os.path.dirname(project_dir)  # Move up a level
+    return None  # No valid project found
+
+# Extract unique project directories containing changed files
+updated_projects = set()
+for file in changed_files:
+    project_root = find_project_root(file)
+    if project_root:
+        updated_projects.add(project_root)
 
 if not updated_projects:
     print("No updated Snowpark projects found. Skipping deployment.")

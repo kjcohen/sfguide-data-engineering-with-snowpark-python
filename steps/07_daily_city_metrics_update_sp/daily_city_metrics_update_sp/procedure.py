@@ -109,6 +109,6 @@ if __name__ == '__main__':
     with Session.builder.getOrCreate() as session:
         import sys
         if len(sys.argv) > 1:
-            print(main(session, *sys.argv[1:]))  # type: ignore
+            print(main(session, *sys.argv[1:]))  # type: ignores
         else:
             print(main(session))  # type: ignore

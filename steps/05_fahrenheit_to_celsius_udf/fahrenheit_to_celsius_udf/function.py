@@ -19,6 +19,6 @@ def main(temp_f: float) -> float:
 # Be aware you may need to type-convert arguments if you add input parameter
 if __name__ == '__main__':
     if len(sys.argv) > 1:
-        print(main(*sys.argv[1:]))  # type: ignore
+        print(main(*sys.argv[1:]))  # type: ignores
     else:
         print(main())  # type: ignore
