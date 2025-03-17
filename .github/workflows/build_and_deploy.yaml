@@ -30,12 +30,15 @@ jobs:
       - name: Get changed files
         id: changed-files
         run: |
-          # Ensure we have access to the remote main branch
-          git fetch origin main
+          git fetch origin main  # Ensure we have access to main history
 
-          # Get a list of changed files compared to origin/main
-          CHANGED_FILES=$(git diff --name-only origin/main...HEAD)
-          
+          # Find the previous commit before the merge
+          PREVIOUS_COMMIT=$(git rev-parse HEAD^)
+          echo "Previous commit: $PREVIOUS_COMMIT"
+
+          # Get changed files in the last commit range
+          CHANGED_FILES=$(git diff --name-only $PREVIOUS_COMMIT HEAD)
+
           if [ -z "$CHANGED_FILES" ]; then
             echo "No changes detected."
             exit 0
@@ -44,6 +47,7 @@ jobs:
           echo "$CHANGED_FILES" > changed_files.txt
           echo "Changed files:"
           cat changed_files.txt
+
 
 
       - name: Deploy Updated Snowpark Apps

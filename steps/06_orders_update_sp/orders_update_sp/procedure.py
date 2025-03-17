@@ -56,7 +56,7 @@ def main(session: Session) -> str:
 
 
 # For local debugging
-# Be aware you may need to type-convert arguments if you add input parameterss
+# Be aware you may need to type-convert arguments if you add input parameter
 if __name__ == '__main__':
     # Create a local Snowpark sessions
     with Session.builder.getOrCreate() as session:
