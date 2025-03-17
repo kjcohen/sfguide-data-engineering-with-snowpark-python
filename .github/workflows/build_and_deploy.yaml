@@ -30,6 +30,13 @@ jobs:
       - name: Install Python packages
         run: pip install -r requirements.txt
 
+      - name: Check SnowCLI Installation
+        run: |
+          which snow || echo "SnowCLI not found"
+          snow --version || echo "SnowCLI not installed correctly"
+          snow --help
+
+
       - name: Deploy Snowpark apps
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
