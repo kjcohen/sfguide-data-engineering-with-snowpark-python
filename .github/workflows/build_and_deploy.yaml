@@ -1,12 +1,9 @@
 name: Deploy Snowpark Apps
 
-# Controls when the action will run. 
 on:
   push:
     branches:
       - main
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
 jobs:
@@ -14,9 +11,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Ensure we fetch history to compare changes
 
       - name: Setup Python 3.10
         uses: actions/setup-python@v4
@@ -29,7 +27,16 @@ jobs:
       - name: Upgrade SnowCLI
         run: pip install --upgrade snowflake-cli-labs
 
-      - name: Deploy Snowpark apps
+      - name: Get changed files
+        id: changed-files
+        run: |
+          # Compare the latest commit with the previous one in main
+          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD)
+          echo "$CHANGED_FILES" > changed_files.txt
+          echo "Changed files:"
+          cat changed_files.txt
+
+      - name: Deploy Updated Snowpark Apps
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
           SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
@@ -37,4 +44,4 @@ jobs:
           SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
           SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
           SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
-        run: python deploy_snowpark_apps.py $GITHUB_WORKSPACE
+        run: python deploy_snowpark_apps.py $GITHUB_WORKSPACE changed_files.txt

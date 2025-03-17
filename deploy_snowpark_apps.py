@@ -2,50 +2,54 @@ import sys
 import os
 import yaml
 
-ignore_folders = ['.git', '__pycache__', '.ipynb_checkpoints']
+ignore_folders = {'.git', '__pycache__', '.ipynb_checkpoints'}
 snowflake_project_config_filename = 'snowflake.yml'
 
-if len(sys.argv) != 2:
-    print("Root directory is required")
-    exit()
+if len(sys.argv) < 3:
+    print("Usage: python deploy_snowpark_apps.py <root_directory> <changed_files>")
+    exit(1)
 
 root_directory = sys.argv[1]
-print(f"Deploying all Snowpark apps in root directory {root_directory}")
+changed_files_path = sys.argv[2]
 
-# Walk the entire directory structure recursively
-for (directory_path, directory_names, file_names) in os.walk(root_directory):
-    # Get just the last/final folder name in the directory path
-    base_name = os.path.basename(directory_path)
+print(f"Deploying only updated Snowpark apps in {root_directory}")
 
-    # Skip any folders we want to ignore
-    # TODO: Update this logic to skip all subfolders of ignored folder
-    if base_name in ignore_folders:
-#        print(f"Skipping ignored folder {directory_path}")
-        continue
+# Read changed files from the GitHub Actions step
+with open(changed_files_path, 'r') as f:
+    changed_files = {line.strip() for line in f.readlines() if line.strip()}
 
-    # An snowflake.yml file in the folder is our indication that this folder contains
-    # a Snow CLI project
-    if not snowflake_project_config_filename in file_names:
-#        print(f"Skipping non-app folder {directory_path}")
-        continue
-    print(f"Found Snowflake project in folder {directory_path}")
+# Extract unique directories containing changed files
+updated_projects = set()
+for file in changed_files:
+    project_dir = os.path.dirname(file)
+    while project_dir and project_dir != root_directory:
+        if os.path.exists(os.path.join(project_dir, snowflake_project_config_filename)):
+            updated_projects.add(project_dir)
+            break
+        project_dir = os.path.dirname(project_dir)
 
-    # Read the project config
-    project_settings = {}
-    with open(f"{directory_path}/{snowflake_project_config_filename}", "r") as yamlfile:
+if not updated_projects:
+    print("No updated Snowpark projects found. Skipping deployment.")
+    exit(0)
+
+for project_path in sorted(updated_projects):
+    print(f"Processing Snowflake project in {project_path}")
+
+    # Read project configuration
+    config_path = os.path.join(project_path, snowflake_project_config_filename)
+    with open(config_path, "r") as yamlfile:
         project_settings = yaml.load(yamlfile, Loader=yaml.FullLoader)
 
-    # Confirm that this is a Snowpark project
-    # TODO: Would be better if the project config file had a project_type key!
+    # Ensure it's a Snowpark project
     if 'snowpark' not in project_settings:
-        print(f"Skipping non Snowpark project in folder {base_name}")
+        print(f"Skipping non-Snowpark project: {project_path}")
         continue
 
-    # Finally deploy the Snowpark project with the snowcli tool
-    print(f"Found Snowflake Snowpark project '{project_settings['snowpark']['project_name']}' in folder {base_name}")
-    print(f"Calling snowcli to deploy the project")
-    os.chdir(f"{directory_path}")
-    # Make sure all 6 SNOWFLAKE_ environment variables are set
-    # SnowCLI accesses the passowrd directly from the SNOWFLAKE_PASSWORD environmnet variable
+    project_name = project_settings['snowpark'].get('project_name', 'Unnamed')
+    print(f"Deploying Snowpark project: {project_name}")
+
+    os.chdir(project_path)
     os.system(f"snow snowpark build --temporary-connection --account $SNOWFLAKE_ACCOUNT --user $SNOWFLAKE_USER --role $SNOWFLAKE_ROLE --warehouse $SNOWFLAKE_WAREHOUSE --database $SNOWFLAKE_DATABASE")
     os.system(f"snow snowpark deploy --replace --temporary-connection --account $SNOWFLAKE_ACCOUNT --user $SNOWFLAKE_USER --role $SNOWFLAKE_ROLE --warehouse $SNOWFLAKE_WAREHOUSE --database $SNOWFLAKE_DATABASE")
+
+print("Deployment complete.")
