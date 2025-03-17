@@ -22,11 +22,14 @@ with open(changed_files_path, 'r') as f:
 updated_projects = set()
 for file in changed_files:
     project_dir = os.path.dirname(file)
+
+    # Traverse up the directory tree to find the closest snowflake.yml
     while project_dir and project_dir != root_directory:
-        if os.path.exists(os.path.join(project_dir, snowflake_project_config_filename)):
+        config_path = os.path.join(project_dir, snowflake_project_config_filename)
+        if os.path.exists(config_path):
             updated_projects.add(project_dir)
-            break
-        project_dir = os.path.dirname(project_dir)
+            break  # Stop once we find the Snowflake project root
+        project_dir = os.path.dirname(project_dir)  # Move up a level
 
 if not updated_projects:
     print("No updated Snowpark projects found. Skipping deployment.")
@@ -35,8 +38,12 @@ if not updated_projects:
 for project_path in sorted(updated_projects):
     print(f"Processing Snowflake project in {project_path}")
 
-    # Read project configuration
     config_path = os.path.join(project_path, snowflake_project_config_filename)
+    if not os.path.exists(config_path):
+        print(f"Skipping {project_path}, no {snowflake_project_config_filename} found.")
+        continue  # Prevents errors if a subfolder is detected incorrectly
+
+    # Read project configuration
     with open(config_path, "r") as yamlfile:
         project_settings = yaml.load(yamlfile, Loader=yaml.FullLoader)
 
