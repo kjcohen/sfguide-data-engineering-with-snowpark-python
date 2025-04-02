@@ -42,7 +42,7 @@ def merge_order_updates(session):
     _ = session.sql('ALTER WAREHOUSE HOL_WH SET WAREHOUSE_SIZE = XSMALL').collect()
 
 def main(session: Session) -> str:
-    return f"Successfully processed ORDERS!"
+    return f"Successfully processed ORDERS!" 
     # Create the ORDERS table and ORDERS_STREAM stream if they don't exist
 #     if not table_exists(session, schema='HARMONIZED', name='ORDERS'):
 #         create_orders_table(session)

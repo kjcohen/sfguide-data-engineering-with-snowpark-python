@@ -97,7 +97,7 @@ def main(session: Session) -> str:
         create_daily_city_metrics_table(session)
     
     merge_daily_city_metrics(session)
-#    session.table('ANALYTICS.DAILY_CITY_METRICS').limit(5).show()
+#    session.table('ANALYTICS.DAILY_CITY_METRICS').limit(5).show() 
 
     return f"Successfully processed DAILY_CITY_METRICS"
 
