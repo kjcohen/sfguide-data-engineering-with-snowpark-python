@@ -45,7 +45,7 @@ for project_path in sorted(project_changes.keys()):
     for file in changed:
         print(f"   - {file}")
 
-    # Change to project directory and deploy
+    # Change to project directory and deploys
     os.chdir(project_path)
     print("🔧 Building project...")
     os.system(f"snow snowpark build --temporary-connection --account $SNOWFLAKE_ACCOUNT --user $SNOWFLAKE_USER --role $SNOWFLAKE_ROLE --warehouse $SNOWFLAKE_WAREHOUSE --database $SNOWFLAKE_DATABASE")
