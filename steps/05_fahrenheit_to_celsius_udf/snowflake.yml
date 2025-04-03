@@ -1,12 +1,11 @@
 definition_version: 1
 snowpark:
-  project_name: "hol"
-  stage_name: "analytics.deployment"
+  project_name: "project"
+  stage_name: "core_w.deployment"
   src: "fahrenheit_to_celsius_udf/"
   functions:
-    - name: "fahrenheit_to_celsius_udf"
-      database: "hol_db"
-      schema: "analytics"
+    - name: "KC_DROP"
+      schema: "CORE_W"
       handler: "function.main"
       runtime: "3.10"
       signature:

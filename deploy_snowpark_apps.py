@@ -1,57 +1,137 @@
 import sys
 import os
 import yaml
-from collections import defaultdict
+import json
+import boto3
+import tempfile
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.backends import default_backend
+import logging
+from botocore.exceptions import BotoCoreError, ClientError
 
-if len(sys.argv) < 3:
-    print("Usage: python deploy_snowpark_apps.py <root_directory> <changed_files>")
+# === CONFIG ===
+SECRET_NAME = 'KeyPairs'
+AWS_REGION = 'us-east-1'
+
+SNOWFLAKE_USER = 'HRSFT_MIGRATION_USER'
+SNOWFLAKE_WAREHOUSE = 'COMPUTE_WH'
+ENV_TO_DB = {
+    'dev': 'DEVELOPMENT',
+    'qa': 'QA',
+    'prod': 'PROD'
+}
+
+def write_private_key_to_pem_file(private_key_pem, passphrase):
+    """
+    Converts an encrypted PEM key to unencrypted PKCS#8 PEM format.
+    Writes to a temp file and returns its path (Snow CLI-compatible on Windows).
+    """
+    try:
+        private_key_pem = private_key_pem.strip().replace("\\n", "\n")
+        private_key_obj = serialization.load_pem_private_key(
+            private_key_pem.encode(),
+            password=passphrase.encode() if passphrase else None,
+            backend=default_backend()
+        )
+
+        pem_data = private_key_obj.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        )
+
+        temp_key_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pem", mode="w", encoding="utf-8")
+        temp_key_file.write(pem_data.decode())
+        temp_key_file.close()
+
+        print(f"[DEBUG] Unencrypted PEM key written to: {temp_key_file.name}")
+        return temp_key_file.name
+
+    except Exception as e:
+        logging.error(f"❌ Error preparing private key: {e}")
+        raise
+
+def load_secret():
+    client = boto3.client('secretsmanager', region_name=AWS_REGION)
+    response = client.get_secret_value(SecretId=SECRET_NAME)
+    return json.loads(response['SecretString'])
+
+def configure_snowflake_env_vars(target_env):
+    if "_" not in target_env:
+        raise ValueError("Invalid environment format. Use <client>_<env> (e.g. wheels_dev)")
+
+    client, env = target_env.split("_", 1)
+    env = env.lower()
+
+    if env not in ENV_TO_DB:
+        raise ValueError(f"Invalid env '{env}'. Must be one of: {', '.join(ENV_TO_DB)}")
+
+    secrets = load_secret()
+
+    account = secrets[f"{client.upper()}_MIG_ACCOUNT"]
+    role = secrets[f"{client.upper()}_MIG_ROLE"]
+    private_key_pem = secrets[f"{client.upper()}_MIG_PRIVATE"]
+    passphrase = secrets[f"{client.upper()}_MIG_PASSPHRASE"]
+    database = ENV_TO_DB[env]
+
+    # Prepare key file for Snow CLI
+    key_path = write_private_key_to_pem_file(private_key_pem, passphrase)
+
+    # Unset the raw key to avoid Snow CLI conflicts
+    os.environ.pop("SNOWFLAKE_PRIVATE_KEY", None)
+
+    # Set environment variables
+    os.environ["SNOWFLAKE_USER"] = SNOWFLAKE_USER
+    os.environ["SNOWFLAKE_AUTHENTICATOR"] = "SNOWFLAKE_JWT"
+    os.environ["SNOWFLAKE_ACCOUNT"] = account
+    os.environ["SNOWFLAKE_ROLE"] = role
+    os.environ["SNOWFLAKE_WAREHOUSE"] = SNOWFLAKE_WAREHOUSE
+    os.environ["SNOWFLAKE_DATABASE"] = database
+    os.environ["SNOWFLAKE_PRIVATE_KEY_PATH"] = key_path
+
+    return {
+        'account': account,
+        'role': role,
+        'database': database
+    }
+
+def run_deploy(project_path):
+    os.chdir(project_path)
+
+    print("🔧 Building project...")
+    os.system("snow snowpark build --temporary-connection")
+
+    print("🚀 Deploying project...")
+    os.system("snow snowpark deploy --replace --temporary-connection")
+
+# === Main execution ===
+if len(sys.argv) < 4:
+    print("Usage: python deploy_snowpark_apps.py <root_directory> <manifest_file> <target_env>")
     exit(1)
 
 root_directory = sys.argv[1]
-changed_files_path = sys.argv[2]
+manifest_file = sys.argv[2]
+target_env = sys.argv[3]  # e.g. "wheels_dev"
 
-print(f"📦 Deploying updated Snowpark apps in: {root_directory}\n")
+print(f"\n📦 Deploying Snowpark projects from manifest: {manifest_file}")
+print(f"🌍 Target environment: {target_env}")
 
-# Read changed files from GitHub Actions
-with open(changed_files_path, 'r') as f:
-    changed_files = [line.strip() for line in f.readlines() if line.strip()]
+# Load secrets and configure env vars for Snow CLI
+configure_snowflake_env_vars(target_env)
 
-# Map project folders to the list of changed files within them
-project_changes = defaultdict(list)
+# Load manifest YAML
+with open(manifest_file, 'r') as f:
+    manifest = yaml.safe_load(f)
 
-for file in changed_files:
-    normalized_path = os.path.normpath(file)
-    parts = normalized_path.split(os.sep)
+project_paths = manifest.get("projects", [])
 
-    # Only track files under steps/{project}/...
-    if len(parts) >= 3 and parts[0] == 'steps':
-        project_name = parts[1]
-        project_dir = os.path.join(root_directory, 'steps', project_name)
-        full_file_path = os.path.join('steps', project_name, *parts[2:])
-        project_changes[project_dir].append(full_file_path)
-
-if not project_changes:
-    print("✅ No updated Snowpark projects found. Skipping deployment.")
+if not project_paths:
+    print("⚠️ No projects listed in manifest. Nothing to deploy.")
     exit(0)
 
-# Deploy each updated project
-for project_path in sorted(project_changes.keys()):
-    project_name = os.path.basename(project_path)
-    changed = project_changes[project_path]
+for rel_path in sorted(set(project_paths)):
+    full_path = os.path.join(root_directory, rel_path)
+    print(f"\n📁 Processing project: {rel_path}")
+    run_deploy(full_path)
 
-    print(f"🚀 Deploying project: {project_name}")
-    print(f"📁 Path: {project_path}")
-    print("📝 Changed files:")
-    for file in changed:
-        print(f"   - {file}")
-
-    # Change to project directory and deploys
-    os.chdir(project_path)
-    print("🔧 Building project...")
-    os.system(f"snow snowpark build --temporary-connection --account $SNOWFLAKE_ACCOUNT --user $SNOWFLAKE_USER --role $SNOWFLAKE_ROLE --warehouse $SNOWFLAKE_WAREHOUSE --database $SNOWFLAKE_DATABASE")
-
-    print("🚢 Deploying project...")
-    os.system(f"snow snowpark deploy --replace --temporary-connection --account $SNOWFLAKE_ACCOUNT --user $SNOWFLAKE_USER --role $SNOWFLAKE_ROLE --warehouse $SNOWFLAKE_WAREHOUSE --database $SNOWFLAKE_DATABASE")
-    print("✅ Deployment complete.\n")
-
-print("🎉 All updated Snowpark projects have been deployed.")
+print("\n✅ All deployments complete.")

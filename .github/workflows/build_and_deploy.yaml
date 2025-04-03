@@ -9,6 +9,10 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write 
+      pull-requests: write
 
     steps:
       - name: Checkout repository
@@ -59,3 +63,19 @@ jobs:
           SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
           SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
         run: python deploy_snowpark_apps.py $GITHUB_WORKSPACE changed_files.txt
+
+# build to where you actually select the objects you want to migrate
+# i.e. i want to move these 5 procs to mag dev / qa 
+# workflows will not be PR based but executed via screens
+# you will only be able to send prod branch level objects to prod database
+# you can send feature branches to dev / qa database
+
+# steps would be
+# 1. build feature-a
+# 2. deploy feature-a to dev from the branch directly
+# 3. if good PR to dev
+# 4. deploy feature-a to qa from the branch directly
+# 5. if good PR to qa
+
+# or maybe im an idiot idk
+# def ask chatgpt for ideas as there has to be a simplified way
